@@ -22,8 +22,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y bc bison build-essential ccache curl flex \
-            gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi libssl-dev libelf-dev \
-            lz4 liblz4-tool make python3 zip
+            gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi binutils-aarch64-linux-gnu \
+            libssl-dev libelf-dev lz4 liblz4-tool make python3 zip
 
       - name: Setup KernelSU
         run: |
@@ -73,9 +73,9 @@ jobs:
             CLANG_TRIPLE=aarch64-linux-gnu- \
             AR=llvm-ar \
             NM=llvm-nm \
-            OBJCOPY=llvm-objcopy \
-            OBJDUMP=llvm-objdump \
-            STRIP=llvm-strip \
+            OBJCOPY=aarch64-linux-gnu-objcopy \
+            OBJDUMP=aarch64-linux-gnu-objdump \
+            STRIP=aarch64-linux-gnu-strip \
             KCFLAGS="-w" \
             KCPPFLAGS="-w"
 
