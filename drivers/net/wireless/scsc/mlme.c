@@ -25,7 +25,7 @@
 #define SLSI_NOA_CONFIG_REQUEST_ID          (1)
 #define SLSI_MLME_ARP_DROP_FREE_SLOTS_COUNT 16
 
-static bool missing_cfm_ind_panic = true;
+static bool missing_cfm_ind_panic = false;
 module_param(missing_cfm_ind_panic, bool, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(missing_cfm_ind_panic, "Panic on missing confirm or indication from the chip");
 
@@ -107,7 +107,7 @@ static struct sk_buff *slsi_mlme_wait_for_cfm(struct slsi_dev *sdev, struct slsi
 
 static int panic_on_lost_ind(u16 ind_id)
 {
-	if (ind_id == MLME_SCAN_DONE_IND)
+	if (ind_id == MLME_SCAN_DONE_IND || ind_id == MLME_DISCONNECT_IND || ind_id == MLME_ROAMED_IND)
 		return 0;
 	return 1;
 }
