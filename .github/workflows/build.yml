@@ -1,0 +1,83 @@
+name: Build Atlas Kernel for Galaxy A21s
+
+on:
+  workflow_dispatch: # Allows you to click "Run workflow" manually
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    name: Compile Kernel
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout Kernel Source
+        uses: actions/checkout@v4
+
+      - name: Install Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential ccache curl flex \
+            gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi libssl-dev libelf-dev \
+            lz4 liblz4-tool make python3 zip
+
+      - name: Download Google Clang Toolchain
+        run: |
+          mkdir -p toolchain
+          cd toolchain
+          # Download Google Android Clang 12 (standard for Linux 4.19 / Exynos 850)
+          curl -LO https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android12-release/clang-r416183b.tar.gz
+          tar -xf clang-r416183b.tar.gz
+          cd ..
+
+      - name: Download AnyKernel3 Flashable Template
+        run: |
+          git clone https://github.com/osm0sis/AnyKernel3.git --depth=1 anykernel
+          # Set Galaxy A21s Device Parameters
+          sed -i 's/device.name1=.*/device.name1=a21s/' anykernel/anykernel.sh
+          sed -i 's/device.name2=.*/device.name2=a21snsxx/' anykernel/anykernel.sh
+          sed -i 's/device.name3=.*/device.name3=SM-A217F/' anykernel/anykernel.sh
+          sed -i 's/block=.*/block=\/dev\/block\/by-name\/boot/' anykernel/anykernel.sh
+          sed -i 's/is_slot_device=1/is_slot_device=0/' anykernel/anykernel.sh
+
+      - name: Compile Atlas Kernel
+        run: |
+          export PATH="$(pwd)/toolchain/bin:$PATH"
+          export ARCH=arm64
+          export SUBARCH=arm64
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+          export CC=clang
+          export CLANG_TRIPLE=aarch64-linux-gnu-
+
+          DEFCONFIG="exynos850-a21snsxx_defconfig"
+
+          echo "==> Configuring defconfig: $DEFCONFIG"
+          make O=out $DEFCONFIG
+
+          echo "==> Starting build..."
+          make -j$(nproc --all) O=out
+
+      - name: Package Flashable Zip
+        run: |
+          if [ -f out/arch/arm64/boot/Image ]; then
+            cp out/arch/arm64/boot/Image anykernel/Image
+          elif [ -f out/arch/arm64/boot/Image.gz ]; then
+            cp out/arch/arm64/boot/Image.gz anykernel/Image.gz
+          fi
+
+          # Copy DTB/DTBO if generated
+          find out/arch/arm64/boot/dts/ -name "*.dtb" -exec cp {} anykernel/dtb.img \; 2>/dev/null || true
+
+          cd anykernel
+          ZIP_NAME="Atlas-A21s-WiFiFix-$(date +'%Y%m%d-%H%M').zip"
+          zip -r9 "../$ZIP_NAME" * -x .git README.md *placeholder
+          cd ..
+          echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
+
+      - name: Upload Kernel Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ZIP_NAME }}
+          path: ${{ env.ZIP_NAME }}
