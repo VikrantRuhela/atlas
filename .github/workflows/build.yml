@@ -1,7 +1,7 @@
 name: Build Atlas Kernel for Galaxy A21s
 
 on:
-  workflow_dispatch: # Allows you to click "Run workflow" manually
+  workflow_dispatch:
   push:
     branches:
       - master
@@ -14,6 +14,9 @@ jobs:
     steps:
       - name: Checkout Kernel Source
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
 
       - name: Install Build Dependencies
         run: |
@@ -22,11 +25,18 @@ jobs:
             gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi libssl-dev libelf-dev \
             lz4 liblz4-tool make python3 zip
 
+      - name: Setup KernelSU
+        run: |
+          if [ ! -f "drivers/kernelsu/Kconfig" ]; then
+            echo "==> drivers/kernelsu/Kconfig not found, pulling KernelSU..."
+            rm -rf drivers/kernelsu
+            curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
+          fi
+
       - name: Download Google Clang Toolchain
         run: |
           mkdir -p toolchain
           cd toolchain
-          # Download Google Android Clang 12 (standard for Linux 4.19 / Exynos 850)
           curl -LO https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android12-release/clang-r416183b.tar.gz
           tar -xf clang-r416183b.tar.gz
           cd ..
@@ -34,7 +44,6 @@ jobs:
       - name: Download AnyKernel3 Flashable Template
         run: |
           git clone https://github.com/osm0sis/AnyKernel3.git --depth=1 anykernel
-          # Set Galaxy A21s Device Parameters
           sed -i 's/device.name1=.*/device.name1=a21s/' anykernel/anykernel.sh
           sed -i 's/device.name2=.*/device.name2=a21snsxx/' anykernel/anykernel.sh
           sed -i 's/device.name3=.*/device.name3=SM-A217F/' anykernel/anykernel.sh
@@ -67,7 +76,6 @@ jobs:
             cp out/arch/arm64/boot/Image.gz anykernel/Image.gz
           fi
 
-          # Copy DTB/DTBO if generated
           find out/arch/arm64/boot/dts/ -name "*.dtb" -exec cp {} anykernel/dtb.img \; 2>/dev/null || true
 
           cd anykernel
