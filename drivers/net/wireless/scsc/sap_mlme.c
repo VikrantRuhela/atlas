@@ -115,6 +115,11 @@ static int sap_mlme_notifier(struct slsi_dev *sdev, unsigned long event)
 
 	case SCSC_WIFI_RESUME:
 #if defined(CONFIG_SLSI_WLAN_STA_FWD_BEACON) && (defined(SCSC_SEP_VERSION) && SCSC_SEP_VERSION >= 10)
+		/* DEADLOCK FIX: Do not acquire ndev_vif->vif_mutex during resume.
+		 * slsi_rx_rcl_channel_list_ind / wifi event workers hold vif_mutex while
+		 * waiting for wiphy_lock, and system resume runs while holding wiphy_lock.
+		 * Acquiring vif_mutex here causes an AB-BA deadlock and triggers a 40s watchdog reset. */
+#if 0
 		dev = slsi_get_netdev(sdev, SLSI_NET_INDEX_WLAN);
 		ndev_vif = netdev_priv(dev);
 		SLSI_MUTEX_LOCK(ndev_vif->vif_mutex);
@@ -130,6 +135,7 @@ static int sap_mlme_notifier(struct slsi_dev *sdev, unsigned long event)
 		}
 
 		SLSI_MUTEX_UNLOCK(ndev_vif->vif_mutex);
+#endif
 #endif
 		SLSI_MUTEX_LOCK(sdev->device_config_mutex);
 		if (!(sdev->device_config.user_suspend_mode) || (sdev->device_config.host_state & SLSI_HOSTSTATE_LCD_ACTIVE)) {
