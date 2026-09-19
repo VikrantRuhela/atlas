@@ -1,148 +1,27 @@
-name: Build Atlas Kernel for Galaxy A21s
+name: CI atlas 
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - master
+
+permissions:
+  contents: write
 
 jobs:
-  build:
-    name: Compile Kernel
+  build-kernel:
+    name: Build Kernel
     runs-on: ubuntu-22.04
-
     steps:
-      - name: Checkout Kernel Source
+      - name: Checkout kernel source
         uses: actions/checkout@v4
         with:
-          submodules: recursive
-          fetch-depth: 1
-
-      - name: Install Build Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y bc bison build-essential ccache curl flex \
-            gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi binutils-aarch64-linux-gnu \
-            libssl-dev libelf-dev lz4 liblz4-tool make python3 zip
-
-      - name: Setup KernelSU
-        run: |
-          if [ -d "KernelSU" ] && [ ! -d "drivers/kernelsu" ]; then
-            ln -sf ../KernelSU/kernel drivers/kernelsu
-          elif [ ! -f "drivers/kernelsu/Kconfig" ]; then
-            rm -rf drivers/kernelsu
-            curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
-          fi
-
-      - name: Download Google Clang Toolchain (Android 15 Clang + LLD)
-        run: |
-          mkdir -p toolchain
-          git clone --depth=1 -b android15-release https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 toolchain_repo
-          mv toolchain_repo/clang-r522817/* toolchain/
-          rm -rf toolchain_repo
-          echo "$(pwd)/toolchain/bin" >> $GITHUB_PATH
-          echo "Clang version: $(toolchain/bin/clang --version | head -n 1)"
-          echo "LLD version: $(toolchain/bin/ld.lld --version | head -n 1)"
-
-      - name: Setup AnyKernel3 Flashable Template
-        run: |
-          git clone https://github.com/osm0sis/AnyKernel3.git --depth=1 anykernel
-          cat << 'EOF' > anykernel/anykernel.sh
-          ### AnyKernel3 Ramdisk Mod Script
-          ## osm0sis @ xda-developers
-
-          ### AnyKernel setup
-          properties() { '
-          kernel.string=Atlas Kernel with Wi-Fi Fix by @Vikrant_R_Rajput
-          do.devicecheck=1
-          do.modules=0
-          do.systemless=1
-          do.cleanup=1
-          do.cleanuponabort=0
-          device.name1=a21s
-          device.name2=a21snsxx
-          device.name3=SM-A217F
-          device.name4=
-          device.name5=
-          supported.versions=
-          supported.patchlevels=
-          supported.vendorpatchlevels=
-          '; } # end properties
-
-          ### AnyKernel install
-          boot_attributes() {
-          set_perm_recursive 0 0 755 644 $RAMDISK/*;
-          set_perm_recursive 0 0 750 750 $RAMDISK/init* $RAMDISK/sbin;
-          } # end attributes
-
-          # boot shell variables
-          BLOCK=/dev/block/by-name/boot;
-          IS_SLOT_DEVICE=0;
-          RAMDISK_COMPRESSION=auto;
-          PATCH_VBMETA_FLAG=auto;
-
-          # import functions/variables and setup patching
-          . tools/ak3-core.sh;
-
-          # boot install
-          dump_boot;
-
-          # init.rc tweaks
-          backup_file init.rc;
-          replace_string init.rc "cpuctl cpu,timer_slack" "mount cgroup none /dev/cpuctl cpu" "mount cgroup none /dev/cpuctl cpu,timer_slack";
-
-          write_boot;
-          ## end boot install
-          EOF
-          chmod +x anykernel/anykernel.sh
-
-      - name: Compile Atlas Kernel
-        run: |
-          export ARCH=arm64
-          export SUBARCH=arm64
-          export CROSS_COMPILE=aarch64-linux-gnu-
-          export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
-
-          DEFCONFIG="exynos850-a21snsxx_defconfig"
-
-          echo "==> Configuring defconfig: $DEFCONFIG"
-          make O=out $DEFCONFIG
-
-          # Ensure SCSC silent recovery is enabled and -Werror is disabled
-          bash scripts/config --file out/.config --disable CONFIG_WERROR
-          bash scripts/config --file out/.config --set-val CONFIG_SCSC_WLAN_SILENT_RECOVERY y
-
-          echo "==> Starting build with modern Clang and LLD..."
-          make -j$(nproc --all) O=out \
-            ARCH=arm64 \
-            SUBARCH=arm64 \
-            LLVM=1 \
-            LLVM_IAS=1 \
-            CLANG_TRIPLE=aarch64-linux-gnu- \
-            CROSS_COMPILE=aarch64-linux-gnu- \
-            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
-            KCFLAGS="-w" \
-            KCPPFLAGS="-w"
-
-      - name: Package Flashable Zip
-        run: |
-          if [ -f out/arch/arm64/boot/Image ]; then
-            cp out/arch/arm64/boot/Image anykernel/Image
-          elif [ -f out/arch/arm64/boot/Image.gz ]; then
-            cp out/arch/arm64/boot/Image.gz anykernel/Image.gz
-          fi
-
-          # Find and copy any built dtb
-          find out/arch/arm64/boot/dts/ -name "*.dtb" -exec cp {} anykernel/dtb \; 2>/dev/null || true
-
-          cd anykernel
-          ZIP_NAME="Atlas-A21s-WiFiFix-$(date +'%Y%m%d-%H%M').zip"
-          zip -r9 "../$ZIP_NAME" * -x .git README.md *placeholder
-          cd ..
-          echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
-
-      - name: Upload Kernel Artifact
-        uses: actions/upload-artifact@v4
+          repository: https://github.com/VikrantRuhela/atlas
+          ref: master
+          path: atlas
+      - name: Build
+        uses: dabao1955/kernel_build_action@main
         with:
-          name: ${{ env.ZIP_NAME }}
-          path: ${{ env.ZIP_NAME }}
+          kernel-url: ./atlas
+          config: exynos850-a21snsxx_defconfig
+          arch: arm64
+          aosp-clang: true
+          anykernel3: true
