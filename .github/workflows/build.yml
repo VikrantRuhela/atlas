@@ -98,10 +98,11 @@ jobs:
           make ARCH=arm64 O=out CC=clang exynos850-a21snsxx_defconfig
           make ARCH=arm64 O=out CC=clang savedefconfig
 
-          # Ensure SCSC silent recovery is enabled and -Werror is disabled
+          # Ensure FAKE_UNAME_5_10 is enabled for S22 One UI port and -Werror is disabled
           if [ -f "scripts/config" ]; then
             bash scripts/config --file out/.config --disable CONFIG_WERROR
-            bash scripts/config --file out/.config --set-val CONFIG_SCSC_WLAN_SILENT_RECOVERY y
+            bash scripts/config --file out/.config --disable CONFIG_FAKE_UNAME_NONE
+            bash scripts/config --file out/.config --enable CONFIG_FAKE_UNAME_5_10
           fi
 
           echo "==> Starting build..."
