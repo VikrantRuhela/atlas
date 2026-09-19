@@ -118,8 +118,11 @@ jobs:
             cp out/arch/arm64/boot/Image.gz anykernel/Image.gz
           fi
 
-          # Find and copy any built dtb
-          find out/arch/arm64/boot/dts/ -name "*.dtb" -exec cp {} anykernel/dtb \; 2>/dev/null || true
+          # Copy verified Samsung Galaxy A21s Multi-DTB table
+          if [ -f "build_tools/dtb" ]; then
+            echo "==> Using verified Samsung Multi-DTB table from build_tools/dtb"
+            cp build_tools/dtb anykernel/dtb
+          fi
 
           cd anykernel
           ZIP_NAME="Atlas-A21s-WiFiFix-$(date +'%Y%m%d-%H%M').zip"
