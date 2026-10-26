@@ -2080,42 +2080,28 @@ static inline struct page *__rmqueue_cma_fallback(struct zone *zone,
 
 /*
  * Move the free pages in a range to the free lists of the requested type.
- * Note that start_page and end_pages are not aligned on a pageblock
+ * Note that start_pfn and end_pfn are not aligned on a pageblock
  * boundary. If alignment is required, use move_freepages_block()
  */
 static int move_freepages(struct zone *zone,
-			  struct page *start_page, struct page *end_page,
+			  unsigned long start_pfn, unsigned long end_pfn,
 			  int migratetype, int *num_movable)
 {
 	struct page *page;
+	unsigned long pfn;
 	unsigned int order;
 	int pages_moved = 0;
-
-#ifndef CONFIG_HOLES_IN_ZONE
-	/*
-	 * page_zone is not safe to call in this context when
-	 * CONFIG_HOLES_IN_ZONE is set. This bug check is probably redundant
-	 * anyway as we check zone boundaries in move_freepages_block().
-	 * Remove at a later date when no bug reports exist related to
-	 * grouping pages by mobility
-	 */
-	VM_BUG_ON(pfn_valid(page_to_pfn(start_page)) &&
-	          pfn_valid(page_to_pfn(end_page)) &&
-	          page_zone(start_page) != page_zone(end_page));
-#endif
 
 	if (num_movable)
 		*num_movable = 0;
 
-	for (page = start_page; page <= end_page;) {
-		if (!pfn_valid_within(page_to_pfn(page))) {
-			page++;
+	for (pfn = start_pfn; pfn <= end_pfn;) {
+		if (!pfn_valid_within(pfn)) {
+			pfn++;
 			continue;
 		}
 
-		/* Make sure we are not inadvertently changing nodes */
-		VM_BUG_ON_PAGE(page_to_nid(page) != zone_to_nid(zone), page);
-
+		page = pfn_to_page(pfn);
 		if (!PageBuddy(page)) {
 			/*
 			 * We assume that pages that could be isolated for
@@ -2126,14 +2112,17 @@ static int move_freepages(struct zone *zone,
 					(PageLRU(page) || __PageMovable(page)))
 				(*num_movable)++;
 
-			page++;
+			pfn++;
 			continue;
 		}
+
+		/* Make sure we are not inadvertently changing nodes */
+		VM_BUG_ON_PAGE(page_to_nid(page) != zone_to_nid(zone), page);
 
 		order = page_order(page);
 		list_move(&page->lru,
 			  &zone->free_area[order].free_list[migratetype]);
-		page += 1 << order;
+		pfn += 1 << order;
 		pages_moved += 1 << order;
 	}
 
@@ -2141,27 +2130,28 @@ static int move_freepages(struct zone *zone,
 }
 
 int move_freepages_block(struct zone *zone, struct page *page,
-				int migratetype, int *num_movable)
+			 int migratetype, int *num_movable)
 {
 	unsigned long start_pfn, end_pfn;
-	struct page *start_page, *end_page;
+
+	if (!zone_spans_pfn(zone, page_to_pfn(page)))
+		return 0;
 
 	start_pfn = page_to_pfn(page);
 	start_pfn = start_pfn & ~(pageblock_nr_pages-1);
-	start_page = pfn_to_page(start_pfn);
-	end_page = start_page + pageblock_nr_pages - 1;
 	end_pfn = start_pfn + pageblock_nr_pages - 1;
 
 	/* Do not cross zone boundaries */
-	if (!zone_spans_pfn(zone, start_pfn)) {
-		start_pfn = page_to_pfn(page);
-		start_page = page;
-	}
+	if (!zone_spans_pfn(zone, start_pfn))
+		start_pfn = zone->zone_start_pfn;
 	if (!zone_spans_pfn(zone, end_pfn))
 		return 0;
 
-	return move_freepages(zone, start_page, end_page, migratetype,
-								num_movable);
+	if (start_pfn > end_pfn)
+		return 0;
+
+	return move_freepages(zone, start_pfn, end_pfn,
+			      migratetype, num_movable);
 }
 
 static void change_pageblock_range(struct page *pageblock_page,
