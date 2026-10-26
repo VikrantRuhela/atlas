@@ -2919,9 +2919,16 @@ static int __zram_bvec_read(struct zram *zram, struct page *page, u32 index,
 	}
 
 	/* Should NEVER happen. BUG() if it does. */
-	if (unlikely(ret))
+	if (unlikely(ret)) {
+#ifdef CONFIG_ZRAM_LRU_WRITEBACK
 		handle_decomp_fail(zram->compressor, ret, index, src, size,
 				   NULL);
+#else
+		pr_err("%ps %s Decompression failed! err=%d index=%u src=0x%px len=%u\n",
+				_RET_IP_, zram->compressor, ret, index, src, size);
+		BUG();
+#endif
+	}
 
 	zs_unmap_object(zram->mem_pool, handle);
 #ifdef CONFIG_ZRAM_LRU_WRITEBACK
