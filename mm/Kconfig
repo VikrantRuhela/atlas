@@ -776,7 +776,7 @@ config INCREASE_MAXIMUM_SWAPPINESS
 config DIRECT_RECLAIM_FILE_PAGES_ONLY
 	bool "Reclaim file pages only on direct reclaim path"
 	depends on SWAP
-	default y
+	default n
 
 config BALANCE_ANON_FILE_RECLAIM
 	bool "During reclaim treat anon and file backed pages equally"
