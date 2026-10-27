@@ -777,6 +777,20 @@ static inline void rmv_page_order(struct page *page)
 	set_page_private(page, 0);
 }
 
+static inline bool freelist_entry_valid(struct list_head *entry)
+{
+	struct list_head *prev = entry->prev;
+	struct list_head *next = entry->next;
+
+	if (next == LIST_POISON1 || prev == LIST_POISON2)
+		return false;
+	if (!next || !prev)
+		return false;
+	if (prev->next != entry || next->prev != entry)
+		return false;
+	return true;
+}
+
 /*
  * This function checks whether a page is free && is the buddy
  * we can coalesce a page and its buddy if
@@ -1204,6 +1218,10 @@ static void free_pcppages_bulk(struct zone *zone, int count,
 		do {
 			page = list_last_entry(list, struct page, lru);
 			/* must delete to avoid corrupting pcp list */
+			if (!freelist_entry_valid(&page->lru)) {
+				pcp->count--;
+				continue;
+			}
 			list_del(&page->lru);
 			pcp->count--;
 
@@ -2039,6 +2057,11 @@ struct page *__rmqueue_smallest(struct zone *zone, unsigned int order,
 							struct page, lru);
 		if (!page)
 			continue;
+		if (!freelist_entry_valid(&page->lru)) {
+			area->nr_free--;
+			rmv_page_order(page);
+			continue;
+		}
 		list_del(&page->lru);
 		rmv_page_order(page);
 		area->nr_free--;
@@ -2135,6 +2158,24 @@ static int move_freepages(struct zone *zone,
 
 		/* Do not touch pages belonging to another zone */
 		if (page_zone(page) != zone) {
+			pfn = page_end_pfn;
+			continue;
+		}
+
+		/* PFN must be aligned to buddy order */
+		if (pfn & ((1 << order) - 1)) {
+			pfn++;
+			continue;
+		}
+
+		/* Free buddy pages must have zero reference count */
+		if (page_count(page) != 0) {
+			pfn = page_end_pfn;
+			continue;
+		}
+
+		/* Do not touch corrupted, poisoned, or unlinked entries */
+		if (!freelist_entry_valid(&page->lru)) {
 			pfn = page_end_pfn;
 			continue;
 		}
@@ -2291,7 +2332,8 @@ static void steal_suitable_fallback(struct zone *zone, struct page *page,
 
 single_page:
 	area = &zone->free_area[current_order];
-	list_move(&page->lru, &area->free_list[start_type]);
+	if (freelist_entry_valid(&page->lru))
+		list_move(&page->lru, &area->free_list[start_type]);
 }
 
 /*
