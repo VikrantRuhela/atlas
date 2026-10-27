@@ -38,7 +38,10 @@ jobs:
 
       - name: Setup AnyKernel3 Flashable Template
         run: |
-          git clone https://github.com/osm0sis/AnyKernel3.git --depth=1 anykernel
+          git clone https://github.com/osm0sis/AnyKernel3.git anykernel
+          cd anykernel
+          git checkout c07298183675001ff8006e885d5c0e2511475519
+          cd ..
           cat << 'EOF' > anykernel/anykernel.sh
           ### AnyKernel3 Ramdisk Mod Script
           ## osm0sis @ xda-developers
