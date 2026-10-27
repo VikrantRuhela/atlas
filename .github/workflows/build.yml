@@ -38,10 +38,9 @@ jobs:
 
       - name: Setup AnyKernel3 Flashable Template
         run: |
-          git clone https://github.com/osm0sis/AnyKernel3.git anykernel
-          cd anykernel
-          git checkout c07298183675001ff8006e885d5c0e2511475519
-          cd ..
+          git clone https://github.com/osm0sis/AnyKernel3.git --depth=1 anykernel
+          # Fix upstream AnyKernel3 regression where [ $? == 1 ] leaves $?=1 and aborts with "Splitting image failed"
+          sed -i 's/\[ \$? == 1 \] && splitfail=1;/case $? in 1) splitfail=1;; 2) touch chromeos;; esac;/' anykernel/tools/ak3-core.sh
           cat << 'EOF' > anykernel/anykernel.sh
           ### AnyKernel3 Ramdisk Mod Script
           ## osm0sis @ xda-developers
