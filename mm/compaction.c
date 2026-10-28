@@ -515,6 +515,17 @@ static unsigned long isolate_freepages_block(struct compact_control *cc,
 
 		/* Found a free page, will break it into order-0 pages */
 		order = page_order(page);
+		if (unlikely(order >= MAX_ORDER))
+			goto isolate_fail;
+
+		/* Buddy head page PFN must be aligned to buddy order */
+		if (unlikely(blockpfn & ((1UL << order) - 1)))
+			goto isolate_fail;
+
+		/* Ensure freelist entry is valid before attempting isolation */
+		if (unlikely(!freelist_entry_valid(&page->lru)))
+			goto isolate_fail;
+
 		isolated = __isolate_free_page(page, order);
 		if (!isolated)
 			break;

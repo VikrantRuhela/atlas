@@ -121,8 +121,8 @@ static void unset_migratetype_isolate(struct page *page, unsigned migratetype)
 
 			if (pfn_valid_within(buddy_pfn) &&
 			    !is_migrate_isolate_page(buddy)) {
-				__isolate_free_page(page, order);
-				isolated_page = true;
+				if (__isolate_free_page(page, order))
+					isolated_page = true;
 			}
 		}
 	}

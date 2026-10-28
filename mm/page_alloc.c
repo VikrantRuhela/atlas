@@ -777,19 +777,7 @@ static inline void rmv_page_order(struct page *page)
 	set_page_private(page, 0);
 }
 
-static inline bool freelist_entry_valid(struct list_head *entry)
-{
-	struct list_head *prev = entry->prev;
-	struct list_head *next = entry->next;
-
-	if (next == LIST_POISON1 || prev == LIST_POISON2)
-		return false;
-	if (!next || !prev)
-		return false;
-	if (prev->next != entry || next->prev != entry)
-		return false;
-	return true;
-}
+/* freelist_entry_valid defined in mm/internal.h */
 
 /*
  * This function checks whether a page is free && is the buddy
@@ -826,6 +814,9 @@ static inline int page_is_buddy(struct page *page, struct page *buddy,
 			return 0;
 
 		VM_BUG_ON_PAGE(page_count(buddy) != 0, buddy);
+
+		if (!freelist_entry_valid(&buddy->lru))
+			return 0;
 
 		return 1;
 	}
@@ -3041,7 +3032,16 @@ int __isolate_free_page(struct page *page, unsigned int order)
 	struct zone *zone;
 	int mt;
 
-	BUG_ON(!PageBuddy(page));
+	if (unlikely(!PageBuddy(page)))
+		return 0;
+
+	if (unlikely(order >= MAX_ORDER))
+		return 0;
+
+	if (unlikely(!freelist_entry_valid(&page->lru))) {
+		rmv_page_order(page);
+		return 0;
+	}
 
 	zone = page_zone(page);
 	mt = get_pageblock_migratetype(page);

@@ -627,4 +627,19 @@ static inline void set_pcppage_migratetype(struct page *page, int migratetype)
 {
 	page->index = migratetype;
 }
+
+static inline bool freelist_entry_valid(struct list_head *entry)
+{
+	struct list_head *prev = entry->prev;
+	struct list_head *next = entry->next;
+
+	if (next == LIST_POISON1 || prev == LIST_POISON2)
+		return false;
+	if (!next || !prev)
+		return false;
+	if (prev->next != entry || next->prev != entry)
+		return false;
+	return true;
+}
+
 #endif	/* __MM_INTERNAL_H */
